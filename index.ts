@@ -14,14 +14,12 @@ import type {
 
 const defaultWebHandler = (err, req, res) => {
   if (err) {
-    console.error("proxy error", err);
     finalhandler(req, res)(err);
   }
 };
 
 const defaultWSHandler = (err, req, socket, head) => {
   if (err) {
-    console.error("proxy error", err);
     socket.destroy();
   }
 };
@@ -56,7 +54,6 @@ function createProxy<T extends HttpServer>(options: {
   ) => void;
   bypassHost?: boolean;
 }): void;
-
 function createProxy<T extends Server>({
   server,
   webProxy,
@@ -102,6 +99,14 @@ function createProxy<T extends Server>({
         : wsProxy,
       wsCallback
     );
+  });
+  server.on("secureConnection", (sock) => {
+    sock.on("error", (err) => {
+      if (err.code === "ECONNRESET" || err.code === 'EPIPE') {
+        return;
+      }
+      throw err;
+    });
   });
 }
 

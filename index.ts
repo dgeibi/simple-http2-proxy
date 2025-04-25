@@ -76,10 +76,7 @@ function createProxy<T extends Server>({
       bypassHost
         ? {
             ...webProxy,
-            hostname:
-              req.headers[":authority"] ||
-              req.headers.host ||
-              webProxy.hostname,
+            ...getTarget(req.headers[":authority"] || req.headers.host),
           }
         : webProxy,
       webCallback
@@ -93,8 +90,7 @@ function createProxy<T extends Server>({
       bypassHost
         ? {
             ...wsProxy,
-            hostname:
-              req.headers[":authority"] || req.headers.host || wsProxy.hostname,
+            ...getTarget(req.headers[":authority"] || req.headers.host),
           }
         : wsProxy,
       wsCallback
@@ -102,7 +98,7 @@ function createProxy<T extends Server>({
   });
   server.on("secureConnection", (sock) => {
     sock.on("error", (err) => {
-      if (err.code === "ECONNRESET" || err.code === 'EPIPE') {
+      if (err.code === "ECONNRESET" || err.code === "EPIPE") {
         return;
       }
       throw err;
@@ -111,3 +107,51 @@ function createProxy<T extends Server>({
 }
 
 export { createProxy };
+
+function getTarget(host: string) {
+  if (host) {
+    const { hostname, error } = parseHost(host);
+    if (error) {
+      throw new Error(error);
+    }
+    return {
+      hostname,
+    };
+  }
+  return {};
+}
+
+function parseHost(hostString: string) {
+  let hostname = null;
+  let port = null;
+
+  // 检查是否包含端口号
+  if (hostString.includes(":")) {
+    // 分割主机名和端口号
+    const parts = hostString.split(":");
+
+    // 如果有多个冒号，则说明是 IPv6 地址
+    if (parts.length > 2) {
+      hostname = parts.slice(0, -1).join(":"); // IPv6 地址
+      port = parseInt(parts.slice(-1)[0], 10);
+    } else {
+      hostname = parts[0]; // 主机名
+      port = parseInt(parts[1], 10); // 端口号
+    }
+  } else {
+    // 没有端口号，则整个字符串是主机名
+    hostname = hostString;
+    port = null;
+  }
+
+  // 验证端口号是否有效
+  if (port !== null && (isNaN(port) || port < 1 || port > 65535)) {
+    return {
+      hostname: null,
+      port: null,
+      error: "Invalid port number",
+    };
+  }
+
+  return { hostname, port, error: null };
+}
